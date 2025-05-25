@@ -64,7 +64,7 @@ if uploaded_files:
 
     # Step 6: Show preview
     st.subheader("✅ Data to be Appended")
-    st.dataframe(df_combined.head(20), use_container_width=True)
+    st.dataframe(df_combined, use_container_width=True)
 
     st.subheader("⚠️ Campaigns with Missing Keyword/Match_Type")
     unmatched_rows = df_combined[df_combined['Keyword'].isna() & df_combined['Match_Type'].isna()][['Campaigns']]
