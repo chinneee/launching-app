@@ -4,37 +4,32 @@ import numpy as np
 import os
 import re
 import glob
-from io import StringIO
 import json
+from datetime import datetime as dt
+
 import gspread
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 
-st.set_page_config(page_title="Append CSV to Google Sheet", layout="wide")
-st.title("📊 Append CSV Data to Google Sheet After Processing")
+st.set_page_config(layout="wide")
+st.title("📤 Append Campaign Data to Google Sheets")
 
-# --- Step 1: Upload CSV Files ---
+# Step 1: Upload CSV files
 uploaded_files = st.file_uploader("Upload one or more CSV files", type="csv", accept_multiple_files=True)
 
 if uploaded_files:
-    # Read and concatenate all CSVs
-    df_list = []
-    for uploaded_file in uploaded_files:
-        df = pd.read_csv(uploaded_file)
-        df_list.append(df)
-    df_combined = pd.concat(df_list, ignore_index=True)
+    # Combine uploaded CSVs
+    df_combined = pd.concat([pd.read_csv(file) for file in uploaded_files], ignore_index=True)
 
-    # --- Step 2: Clean & Transform Data ---
-    st.subheader("✅ Data Cleaning and Transformation")
-
+    # Step 2: Add missing columns
     df_combined["Keyword"] = ""
     df_combined["Match_Type"] = ""
 
-    # Add CVR column
-    df_combined["CVR"] = df_combined["Orders"] / df_combined["Clicks"]
+    # Step 3: Calculate CVR safely
+    df_combined["CVR"] = df_combined["Orders"] / df_combined["Clicks"].replace(0, np.nan)
     df_combined["CVR"] = df_combined["CVR"].fillna(0)
 
-    # Campaign keyword extraction function
+    # Step 4: Extract keyword and match type
     def extract_keyword_type(campaign):
         campaign = str(campaign).strip().lower()
         campaign = re.sub(r'[_\s]*\d{1,2}h(?:\d{1,2}m?)?$', '', campaign)
@@ -60,42 +55,43 @@ if uploaded_files:
             return pd.Series([keyword.strip(), type_part])
         return pd.Series([None, None])
 
-    df_combined[['Keyword', 'Match_Type']] = df_combined['Campaigns'].apply(extract_keyword_type)
+    df_combined[["Keyword", "Match_Type"]] = df_combined["Campaigns"].apply(extract_keyword_type)
 
-    # Convert and format date
+    # Step 5: Format date & CPC
     df_combined['Start date'] = pd.to_datetime(df_combined['Start date'], format='%d/%m/%y', errors='coerce')
     df_combined['Start date'] = df_combined['Start date'].dt.strftime('%d/%m/%Y')
-
-    # Clean CPC column
     df_combined['CPC(USD)'] = df_combined['CPC(USD)'].replace({r'\$': '', ',': '.'}, regex=True).replace('', '0').astype(float)
 
-    st.success("Data processing complete ✅")
-    st.dataframe(df_combined.head())
+    # Step 6: Show preview
+    st.subheader("✅ Data to be Appended")
+    st.dataframe(df_combined.head(20), use_container_width=True)
 
-    # --- Step 3: Upload credentials.json ---
-    st.subheader("🔐 Upload credentials.json to connect to Google Sheets")
-    cred_file = st.file_uploader("Upload your `credentials.json` file", type="json", key="cred")
+    st.subheader("⚠️ Campaigns with Missing Keyword/Match_Type")
+    unmatched_rows = df_combined[df_combined['Keyword'].isna() & df_combined['Match_Type'].isna()][['Campaigns']]
+    st.dataframe(unmatched_rows, use_container_width=True)
 
-    if cred_file is not None:
-        try:
+    # Step 7: Export button
+    if st.button("📤 Export to Google Sheets"):
+        cred_file = st.file_uploader("Upload your `credentials.json` file", type="json", key="cred")
+
+        if cred_file is not None:
             service_account_info = json.load(cred_file)
-            creds = Credentials.from_service_account_info(service_account_info, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+            creds = Credentials.from_service_account_info(
+                service_account_info,
+                scopes=["https://www.googleapis.com/auth/spreadsheets"]
+            )
             client = gspread.authorize(creds)
 
-            # Google Sheet ID and Worksheet name
-            sheet_id = "1vaKOc9re-xBwVhJ3oOOGtjmGVembMsAUq93krQo0mpc"
-            sheet_name = "LAUNCHING 2025"
+            # Sheet info
+            SHEET_ID = "1vaKOc9re-xBwVhJ3oOOGtjmGVembMsAUq93krQo0mpc"
+            worksheet_name = "LAUNCHING 2025"
 
-            worksheet = client.open_by_key(sheet_id).worksheet(sheet_name)
+            sheet = client.open_by_key(SHEET_ID).worksheet(worksheet_name)
+            current_data = sheet.get_all_values()
+            start_row = len(current_data) + 1
 
-            # Get number of rows to append
-            data = worksheet.get_all_values()
-            existing_rows = len(data)
-            start_row = existing_rows + 1
-
-            # Append data
-            set_with_dataframe(worksheet, df_combined, row=start_row, col=1, include_column_header=False)
-            st.success(f"✅ Data successfully appended starting at row {start_row}.")
-
-        except Exception as e:
-            st.error(f"❌ Failed to authenticate or append: {e}")
+            # Append
+            set_with_dataframe(sheet, df_combined, row=start_row, col=1, include_column_header=False)
+            st.success(f"✅ Appended {len(df_combined)} rows to Google Sheets starting from row {start_row}.")
+        else:
+            st.warning("⏳ Please upload your credentials.json file to export.")
