@@ -15,7 +15,7 @@ st.set_page_config(layout="wide")
 st.title("📤 Append Campaign Data to Google Sheets")
 
 # Step 1: Upload CSV files
-uploaded_files = st.file_uploader("Upload one or more CSV files", type="csv", accept_multiple_files=True)
+uploaded_files = st.file_uploader("📁 Upload one or more CSV files", type="csv", accept_multiple_files=True)
 
 if uploaded_files:
     # Combine uploaded CSVs
@@ -70,11 +70,12 @@ if uploaded_files:
     unmatched_rows = df_combined[df_combined['Keyword'].isna() & df_combined['Match_Type'].isna()][['Campaigns']]
     st.dataframe(unmatched_rows, use_container_width=True)
 
-    # Step 7: Export button
-    if st.button("📤 Export to Google Sheets"):
-        cred_file = st.file_uploader("Upload your `credentials.json` file", type="json", key="cred")
+    # Step 7: Upload credentials first
+    st.subheader("🔑 Upload your `credentials.json` file")
+    cred_file = st.file_uploader("Upload `credentials.json` to enable export", type="json", key="cred")
 
-        if cred_file is not None:
+    if cred_file is not None:
+        try:
             service_account_info = json.load(cred_file)
             creds = Credentials.from_service_account_info(
                 service_account_info,
@@ -86,12 +87,18 @@ if uploaded_files:
             SHEET_ID = "1vaKOc9re-xBwVhJ3oOOGtjmGVembMsAUq93krQo0mpc"
             worksheet_name = "LAUNCHING 2025"
 
-            sheet = client.open_by_key(SHEET_ID).worksheet(worksheet_name)
-            current_data = sheet.get_all_values()
-            start_row = len(current_data) + 1
+            # Export button only shows when credentials are uploaded
+            if st.button("📤 Export to Google Sheets"):
+                sheet = client.open_by_key(SHEET_ID).worksheet(worksheet_name)
+                current_data = sheet.get_all_values()
+                start_row = len(current_data) + 1
 
-            # Append
-            set_with_dataframe(sheet, df_combined, row=start_row, col=1, include_column_header=False)
-            st.success(f"✅ Appended {len(df_combined)} rows to Google Sheets starting from row {start_row}.")
-        else:
-            st.warning("⏳ Please upload your credentials.json file to export.")
+                # Append
+                set_with_dataframe(sheet, df_combined, row=start_row, col=1, include_column_header=False)
+                st.success(f"✅ Appended {len(df_combined)} rows to Google Sheets starting from row {start_row}.")
+
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
+
+    else:
+        st.info("⏳ Please upload your `credentials.json` file to enable export.")
