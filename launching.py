@@ -87,18 +87,24 @@ if uploaded_files:
             SHEET_ID = "1vaKOc9re-xBwVhJ3oOOGtjmGVembMsAUq93krQo0mpc"
             worksheet_name = "LAUNCHING 2025"
 
+
             # Export button only shows when credentials are uploaded
             if st.button("📤 Export to Google Sheets"):
                 sheet = client.open_by_key(SHEET_ID).worksheet(worksheet_name)
+
+                # Get column headers from existing sheet
+                headers = sheet.row_values(1)
+
+                # Filter df_combined to only include columns in headers
+                df_export = df_combined[[col for col in headers if col in df_combined.columns]]
+
+                # Get current number of rows in the sheet
                 current_data = sheet.get_all_values()
                 start_row = len(current_data) + 1
 
-                # Append
-                set_with_dataframe(sheet, df_combined, row=start_row, col=1, include_column_header=False)
-                st.success(f"✅ Appended {len(df_combined)} rows to Google Sheets starting from row {start_row}.")
+                # Append filtered data
+                set_with_dataframe(sheet, df_export, row=start_row, col=1, include_column_header=False)
+                st.success(f"✅ Appended {len(df_export)} rows to Google Sheets starting from row {start_row}.")
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
-
-    else:
-        st.info("⏳ Please upload your `credentials.json` file to enable export.")
