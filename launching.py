@@ -58,7 +58,7 @@ if uploaded_files:
     df_combined[["Keyword", "Match_Type"]] = df_combined["Campaigns"].apply(extract_keyword_type)
 
     # Step 5: Format date & CPC
-    df_combined['Start date'] = pd.to_datetime(df_combined['Start date'], format='%d/%m/%y', errors='coerce')
+    df_combined['Start date'] = pd.to_datetime(df_combined['Start date'], format='%m/%d/%y', errors='coerce')
     df_combined['Start date'] = df_combined['Start date'].dt.strftime('%d/%m/%Y')
     df_combined['CPC(USD)'] = df_combined['CPC(USD)'].replace({r'\$': '', ',': '.'}, regex=True).replace('', '0').astype(float)
 
